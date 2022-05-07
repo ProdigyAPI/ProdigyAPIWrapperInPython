@@ -38,8 +38,7 @@ def tokenify(username: str, password: str) -> TokenifyOutput:
     data["unauthenticated_game_login_form[username]"] = username
     data["unauthenticated_game_login_form[password]"] = password
     data["button"] = ""
-    data["g-recaptcha-response"] = "15,38,39,39,4,39,4,4"
-    login = s.post(r.url, 
+    login = s.post(r.url,
         headers = {
             "content-type": "application/x-www-form-urlencoded",
         },
@@ -50,7 +49,11 @@ def tokenify(username: str, password: str) -> TokenifyOutput:
     if not login.ok and not str(login.status_code).startswith("3"):
         raise Exception(f"Initial login request was unsuccessful with code {login.status_code}.")
 
-    clientID = re.findall("var client_id = '([0-9a-f]+)';", login.text)[0]
+    playLoginParams = {}
+    playLoginParams["authenticity_token"] = BeautifulSoup(login.text, "lxml").select_one("input[name=authenticity_token]")["value"]
+    schoolLogin = s.post(f"https://sso.prodigygame.com/premises?premises=home&rid={parse_qs(urlparse(login.url).query)['rid']}", headers = { "content-type": "application/x-www-form-urlencoded" }, data = playLoginParams, allow_redirects = True)
+
+    clientID = re.findall("client_id=\"([0-9a-f]+)\"", schoolLogin.text)[0]
     data = {}
 
     data["client_id"] =  clientID
@@ -74,7 +77,7 @@ def tokenify(username: str, password: str) -> TokenifyOutput:
     parsed = urlparse(secondTokenLogin.headers.get("location"))
     tokenInit = parse_qs(parsed.fragment)
     master = requests.post("https://api.prodigygame.com/game-auth-api/v4/user", data=json.dumps({"identityToken": tokenInit["access_token"][0]}), headers = {"Content-Type": "application/json"})
-    
+
     if not master.ok:
         raise Exception(f"Master request failed with a code of {master.status_code}.")
 
